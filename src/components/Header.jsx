@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-// 🌟 1. 삭제 버튼에 필요한 X 아이콘 추가
-import { Coffee, Bell, X } from 'lucide-react';
+import { Coffee, Bell, X } from 'lucide-react'; 
 import axios from 'axios';
 
 const Header = ({ isLoggedIn, setIsLoggedIn, userName }) => {
@@ -150,6 +149,36 @@ const Header = ({ isLoggedIn, setIsLoggedIn, userName }) => {
     }
   };
 
+  const handleDeleteNotification = async (e, id) => {
+    e.stopPropagation(); 
+    setNotifications(prev => prev.filter(n => n.id !== id));
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${BACKEND_URL}/api/notifications/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!response.ok) console.error(`서버 응답 에러 (${response.status}): 개별 삭제 실패`);
+    } catch (error) {
+      console.error("❌ 알림 영구 삭제 중 에러 발생:", error);
+    }
+  };
+
+  const handleDeleteAll = async (e) => {
+    e.stopPropagation();
+    setNotifications([]);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${BACKEND_URL}/api/notifications/all`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!response.ok) console.error(`서버 응답 에러 (${response.status}): 전체 삭제 실패`);
+    } catch (error) {
+      console.error("❌ 알림 전체 영구 삭제 중 에러 발생:", error);
+    }
+  };
+
   const handleLogout = () => {
     localStorage.clear(); 
     setIsLoggedIn(false);
@@ -165,19 +194,32 @@ const Header = ({ isLoggedIn, setIsLoggedIn, userName }) => {
     <nav className="sticky top-0 z-50 bg-[#1a2332] text-white shadow-lg border-0">
       <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
         
-        <div className="flex items-center gap-2 cursor-pointer select-none" onClick={() => navigate('/')}>
-          <Coffee className="w-8 h-8 text-white" />
-          <span className="text-xl font-bold tracking-tight">TeaTimes</span>
+        {/* 왼쪽 영역: 로고 + 메뉴 묶음 */}
+        <div className="flex items-center gap-10">
+          {/* 로고 */}
+          <div className="flex items-center gap-2 cursor-pointer select-none" onClick={() => navigate('/')}>
+            <Coffee className="w-8 h-8 text-white" />
+            <span className="text-xl font-bold tracking-tight">TeaTimes</span>
+          </div>
+
+          {/* 메뉴 (로고 옆으로 이동) */}
+          <ul className="flex items-center gap-6 list-none m-0 p-0 text-sm font-medium">
+            <li 
+              onClick={() => navigate('/mentors')} 
+              className={`hover:text-blue-300 transition cursor-pointer ${location.pathname === '/mentors' ? 'text-blue-400 font-bold' : 'text-white/80'}`}
+            >
+              호스트 찾기
+            </li>
+            <li 
+              onClick={() => navigate('/coffee-chats')} 
+              className={`hover:text-blue-300 transition cursor-pointer ${location.pathname === '/coffee-chats' ? 'text-blue-400 font-bold' : 'text-white/80'}`}
+            >
+              커피챗
+            </li>
+          </ul>
         </div>
 
-        <ul className="flex items-center gap-8 list-none m-0 p-0 text-sm font-medium">
-          <li onClick={() => navigate('/mentors')} className="hover:text-blue-300 transition cursor-pointer">호스트 찾기</li>
-          <li className="hover:text-blue-300 transition cursor-pointer opacity-70 hover:opacity-100">주제 탐색</li>
-          <li className="hover:text-blue-300 transition cursor-pointer opacity-70 hover:opacity-100">커뮤니티</li>
-          <li className="hover:text-blue-300 transition cursor-pointer opacity-70 hover:opacity-100">작동 방식</li>
-          <li onClick={() => navigate('/coffee-chats')} className="hover:text-blue-300 transition cursor-pointer opacity-70 hover:opacity-100">커피챗</li>
-        </ul>
-
+        {/* 오른쪽 영역: 인증 및 알림 버튼 */}
         <div className="auth-buttons flex items-center gap-4">
           {(!isLoggedIn || !isMentor) && (
             <button 
@@ -199,7 +241,6 @@ const Header = ({ isLoggedIn, setIsLoggedIn, userName }) => {
               </div>
 
               {isOpen && (
-                // 🌟 3. HTML 레이아웃 중복 버그 수정 완료
                 <div className="absolute right-24 top-10 w-80 bg-white text-gray-800 rounded-xl shadow-2xl border border-gray-200 py-2 z-50">
                   <div className="px-4 py-2 border-b border-gray-100 flex items-center justify-between">
                     <span className="font-bold text-xs text-gray-500">실시간 알림</span>
@@ -212,19 +253,19 @@ const Header = ({ isLoggedIn, setIsLoggedIn, userName }) => {
                       </button>
                     )}
                   </div>
+
                   
                   <div className="max-h-60 overflow-y-auto">
                     {notifications.length === 0 ? (
-                      <div className="px-4 py-6 text-center text-sm text-gray-400">새로운 알림이 없습니다.</div>
+                      <div className="px-4 py-8 text-center text-sm text-gray-400">새로운 알림이 없습니다.</div>
                     ) : (
                       notifications.map((notif) => (
-                        // 🌟 4. onClick 및 className 중복 에러 해결 완료
                         <div 
                           key={notif.id}
                           onClick={() => handleNotificationClick(notif)}
                           className={`group relative px-4 py-3 text-xs border-b border-gray-50 transition cursor-pointer hover:bg-gray-50 ${!notif.is_read ? 'bg-blue-50/60 font-semibold' : 'opacity-60'}`}
                         >
-                          <p className="m-0 text-gray-700">{notif.message}</p>
+                          <p className="m-0 text-gray-700 pr-6">{notif.message}</p>
                           <span className="text-[10px] text-gray-400 block mt-1">방금 전</span>
                           <button
                             onClick={(e) => handleDeleteNotification(e, notif.id)}
@@ -237,10 +278,8 @@ const Header = ({ isLoggedIn, setIsLoggedIn, userName }) => {
                       ))
                     )}
                   </div>
-                </div>
-              )}
-
-              <span 
+                  
+                <span 
                 onClick={() => navigate('/dashboard')} 
                 className="cursor-pointer text-sm font-bold text-amber-300 hover:text-amber-200 transition"
                 title="마이 대시보드로 이동"

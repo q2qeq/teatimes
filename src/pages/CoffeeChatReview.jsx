@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Star, Send, Loader2 } from 'lucide-react'; // 💡 로딩 아이콘(Loader2) 추가
+import { Star, Send, Loader2 } from 'lucide-react';
 import axios from 'axios';
 
 export default function CoffeeChatReview() {
@@ -9,69 +9,63 @@ export default function CoffeeChatReview() {
   
   const [rating, setRating] = useState(0);
   const [hoveredRating, setHoveredRating] = useState(0);
-  
-  // 💡 1. 텍스트 박스마다 상태(State)를 분리했습니다.
-  const [userReview, setUserReview] = useState(''); // 유저가 직접 쓰는 리뷰
-  const [summary, setSummary] = useState('');       // AI 대화 요약본
-  const [aiAdvice, setAiAdvice] = useState('');     // AI 어드바이스
-  
+  const [userReview, setUserReview] = useState('');  // 유저가 직접 쓰는 리뷰
+  const [summary, setSummary] = useState('');         // AI 대화 요약본
+  const [booking, setBooking] = useState(null);
+  const [session, setSession] = useState(null);
   const [isGenerating, setIsGenerating] = useState(true); // AI 로딩 상태
 
   const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://48.211.169.52:8000';
 
-  // 💡 2. 컴포넌트가 켜질 때 백엔드(파이썬 파이프라인)에서 요약본을 가져옵니다.
   useEffect(() => {
-    const fetchAIData = async () => {
-      try {
-        setIsGenerating(true);
-        const token = localStorage.getItem('token');
-        
-        // 백엔드 API 주소에 맞게 수정하세요 (예: /api/chat/{chatId}/summary)
-        const response = await axios.get(`${BACKEND_URL}/api/chat/${chatId}/summary`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
+    const userId = localStorage.getItem('userId');
+    if (!userId) return;
 
-        // 백엔드에서 주는 JSON 키 이름에 맞게 수정하세요
-        setSummary(response.data.summary_text || response.data.session_consensus || '');
-        setAiAdvice(response.data.ai_advice || '');
-        
-      } catch (error) {
-        console.error("AI 데이터를 불러오는 중 에러 발생:", error);
-        setSummary("요약본을 불러오지 못했습니다.");
-        setAiAdvice("어드바이스를 불러오지 못했습니다.");
-      } finally {
-        setIsGenerating(false);
-      }
-    };
+    // 예약 정보 가져오기
+    axios.get(`${BACKEND_URL}/api/booking/${userId}`)
+      .then(res => {
+        const found = res.data.find(b => String(b.id) === String(chatId));
+        if (found) setBooking(found);
+      })
+      .catch(err => console.error(err));
 
-    if (chatId) {
-      fetchAIData();
-    }
-  }, [chatId, BACKEND_URL]);
+    // 요약 생성 먼저 → 그다음 세션 정보 가져오기
+    setIsGenerating(true);
+    axios.post(`${BACKEND_URL}/api/chat-session/${chatId}/generate-summary`, {})
+      .then(() => {
+        return axios.get(`${BACKEND_URL}/api/chat-session/${chatId}`);
+      })
+      .then(res => {
+        setSession(res.data);
+        if (res.data.ai_summary) {
+          setSummary(res.data.ai_summary);
+        }
+      })
+      .catch(err => console.error(err))
+      .finally(() => setIsGenerating(false));
+
+  }, [chatId]);
 
   const handleSubmit = async () => {
     if (rating === 0) {
       alert('별점을 선택해주세요!');
       return;
     }
-    
-    // 💡 3. 서버로 리뷰 제출 로직 (예시)
+
     try {
-      const token = localStorage.getItem('token');
-      await axios.post(`${BACKEND_URL}/api/reviews`, {
-        chatId: chatId,
+      const userId = localStorage.getItem('userId');
+      await axios.post(`${BACKEND_URL}/api/review/create`, {
+        booking_id: Number(chatId),
+        user_id: Number(userId),
+        mentor_id: booking?.mentor_id || 0,
         rating: rating,
-        review: userReview,
-        // 필요하다면 요약본 데이터도 같이 넘길 수 있습니다.
-      }, {
-        headers: { 'Authorization': `Bearer ${token}` }
+        review: userReview
       });
-      
       alert('리뷰가 성공적으로 제출되었습니다!');
-      navigate('/dashboard');
-    } catch (error) {
-      console.error("리뷰 제출 실패:", error);
-      alert('제출에 실패했습니다. 다시 시도해주세요.');
+      navigate('/coffee-chats');
+    } catch (err) {
+      console.error('리뷰 제출 실패:', err);
+      alert('리뷰 제출에 실패했어요');
     }
   };
 
@@ -79,20 +73,31 @@ export default function CoffeeChatReview() {
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 flex items-center justify-center p-6">
       <div className="w-full max-w-2xl">
         <div className="bg-white rounded-3xl shadow-2xl p-12">
-          
+
           {/* 헤더 */}
           <div className="text-center mb-12">
             <div className="w-24 h-24 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white font-bold text-3xl mx-auto mb-6">
-              JS
+              {booking?.mentor_name?.slice(0, 1) || '멘'}
             </div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">티타임이 종료되었습니다</h1>
-            <p className="text-gray-600">'상대방-수정필요' 님과의 세션이 완료되었습니다</p>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">
+              커피챗이 종료되었습니다
+            </h1>
+            <p className="text-gray-600">
+              {booking?.mentor_name || '멘토'} 님과의 세션이 완료되었습니다
+            </p>
+            {session?.duration_sec && (
+              <p className="text-sm text-gray-400 mt-1">
+                진행 시간: {Math.floor(session.duration_sec / 60)}분 {session.duration_sec % 60}초
+              </p>
+            )}
           </div>
 
-          {/* 별점 평가 */}
+          {/* 별점 */}
           <div className="mb-8">
-            <h3 className="font-bold text-gray-900 mb-4 text-center">티타임은 어떠셨나요?</h3>
-            <div className="flex items-center justify-center gap-3 mb-8">
+            <h3 className="font-bold text-gray-900 mb-4 text-center">
+              커피챗은 어떠셨나요?
+            </h3>
+            <div className="flex items-center justify-center gap-3 mb-4">
               {[1, 2, 3, 4, 5].map((star) => (
                 <button
                   key={star}
@@ -111,55 +116,65 @@ export default function CoffeeChatReview() {
                 </button>
               ))}
             </div>
-            <div className="text-center mb-2">
+            <div className="text-center">
               <span className="text-2xl font-bold text-gray-900">
                 {rating === 0 ? '별점을 선택해주세요' : `${rating}.0`}
               </span>
             </div>
           </div>
 
-          {/* 💡 사용자가 직접 쓰는 리뷰 영역 */}
-          <div className="bg-gray-50 rounded-xl p-6 mb-8">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold text-gray-900">리뷰 남기기</h3>
-            </div>
-            <div className="bg-white rounded-lg p-4">
-              <textarea
-                value={userReview}
-                onChange={(e) => setUserReview(e.target.value)}
-                placeholder="상대방과의 티타임이 어땠는지 솔직한 후기를 남겨주세요."
-                className="w-full h-32 p-3 text-sm text-gray-700 bg-white border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none shadow-sm"
-              />
-            </div>
+          {/* 리뷰 작성 */}
+          <div className="bg-gray-50 rounded-xl p-6 mb-6">
+            <h3 className="font-bold text-gray-900 mb-3">리뷰</h3>
+            <textarea
+              value={userReview}
+              onChange={(e) => setUserReview(e.target.value)}
+              className="w-full h-32 p-3 text-sm text-gray-700 bg-white border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+              placeholder="멘토와의 대화는 어떠셨나요?"
+            />
           </div>
 
-          {/* 💡 AI 요약 및 어드바이스 영역 */}
-          <div className="mb-8 space-y-6">
-            <div>
-              <label className="flex items-center gap-2 font-bold text-gray-900 mb-3">
-                대화내용 요약본 
+          {/* 대화내용 요약본 */}
+          <div className="mb-6">
+            <div className="flex items-center justify-between mb-3">
+              <label className="flex items-center gap-2 font-bold text-gray-900">
+                대화내용 요약본
                 {isGenerating && <Loader2 className="w-4 h-4 animate-spin text-blue-500" />}
               </label>
-              <textarea
-                value={isGenerating ? "AI가 대화 내용을 안전하게 마스킹하고 요약 중입니다..." : summary}
-                readOnly // 💡 AI가 써준 글이므로 수정 불가 처리 (필요시 삭제 가능)
-                rows={6}
-                className={`w-full px-4 py-3 border-2 border-gray-200 rounded-xl outline-none resize-none ${isGenerating ? 'text-gray-400 bg-gray-50' : 'text-gray-700 bg-white'}`}
-              />
+              <a 
+                href={`${BACKEND_URL}/api/chat-session/${chatId}/summary-pdf`}
+                download="커피챗_요약리포트.pdf"
+                className="flex items-center gap-1 px-4 py-1.5 border-2 border-blue-600 text-blue-600 rounded-lg text-sm font-semibold hover:bg-blue-50"
+              >
+                📄 PDF 다운로드
+              </a>
             </div>
+            <textarea
+              value={isGenerating ? 'AI가 대화 내용을 안전하게 마스킹하고 요약 중입니다...' : summary}
+              onChange={(e) => setSummary(e.target.value)}
+              rows={6}
+              placeholder="대화 내용을 요약해주세요"
+              className={`w-full px-4 py-3 border-2 rounded-xl outline-none focus:border-blue-500 resize-none whitespace-pre-wrap ${
+                isGenerating ? 'border-gray-100 bg-gray-50 text-gray-400' : 'border-gray-200 text-gray-700'
+              }`}
+            />
+          </div>
 
-            <div>
-              <label className="flex items-center gap-2 font-bold text-gray-900 mb-3">
-                AI 어드바이스
-                {isGenerating && <Loader2 className="w-4 h-4 animate-spin text-purple-500" />}
-              </label>
-              <textarea
-                value={isGenerating ? "AI 페이스메이커가 맞춤형 조언을 생성하고 있습니다..." : aiAdvice}
-                readOnly // 💡 수정 불가 처리
-                rows={6}
-                className={`w-full px-4 py-3 border-2 border-gray-200 rounded-xl outline-none resize-none ${isGenerating ? 'text-gray-400 bg-gray-50' : 'text-gray-700 bg-white'}`}
-              />
-            </div>
+          {/* AI 어드바이스 */}
+          <div className="mb-8">
+            <label className="flex items-center gap-2 font-bold text-gray-900 mb-3">
+              AI 어드바이스
+              {isGenerating && <Loader2 className="w-4 h-4 animate-spin text-purple-500" />}
+            </label>
+            <textarea
+              rows={6}
+              placeholder="AI 어드바이스가 여기에 표시돼요"
+              readOnly
+              className="w-full px-4 py-3 border-2 border-gray-100 bg-gray-50 rounded-xl outline-none resize-none text-gray-500"
+            />
+            <p className="text-sm text-gray-500 mt-2">
+              {userReview.length} / 500 자
+            </p>
           </div>
 
           {/* 제출 버튼 */}
@@ -170,7 +185,7 @@ export default function CoffeeChatReview() {
             <Send className="w-5 h-5" />
             리뷰 제출하기
           </button>
-          
+
         </div>
       </div>
     </div>

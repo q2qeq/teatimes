@@ -8,7 +8,7 @@ const BookingHistory = () => {
   const [bookings, setBookings] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   
-  // 💡 Header(알림)에서 넘어온 subTab 상태가 있으면 해당 탭을 엽니다!
+  // Header(알림)에서 넘어온 subTab 상태가 있으면 해당 탭을 엽니다
   useEffect(() => {
     if (location.state && location.state.subTab) {
       setActiveTab(location.state.subTab);
@@ -58,7 +58,7 @@ const BookingHistory = () => {
           const data = await response.json();
           setBookings(data);
         } else {
-          console.log(`서버 응답 에러 (${response.status})`);
+          console.log(`서버 응답 에러 (${response.status}): 백엔드에 API가 있는지 확인하세요.`);
         }
       } catch (error) {
         console.error("예약 내역 로드 중 에러 발생:", error);
@@ -120,6 +120,16 @@ const BookingHistory = () => {
     }
   };
 
+  const getDisplayDateTime = (dateData, timeData, candidateTimes) => {
+    let cleanTime = timeData || candidateTimes || '';
+    if (typeof cleanTime === 'string') {
+      cleanTime = cleanTime.replace(/[\[\]'"]/g, '').trim();
+    }
+    let cleanDate = dateData || '';
+    if (cleanDate && cleanTime) return `${cleanDate} ${cleanTime}`;
+    return cleanDate || cleanTime || '시간 미정';
+  };
+
   if (isLoading) {
     return (
       <div className="w-full h-64 flex items-center justify-center bg-transparent">
@@ -168,7 +178,7 @@ const BookingHistory = () => {
         </div>
       </div>
 
-      {/* 예약 리스트 */}
+      {/* 예약 카드 리스트 */}
       <div className="space-y-5">
         {Array.isArray(bookings) && bookings.map((booking) => {
           const displayName = booking.partner_name || booking.mentee_name || "알 수 없음";
@@ -180,6 +190,7 @@ const BookingHistory = () => {
               className="bg-white rounded-3xl p-6 shadow-sm border border-slate-200/80 hover:shadow-lg hover:border-blue-200 transition-all duration-300 flex flex-col lg:flex-row lg:items-center gap-6 group"
             >
               
+              {/* 좌측: 프로필 영역 */}
               <div className="flex items-center gap-4 lg:w-[220px] flex-shrink-0">
                 <div className="relative">
                   <img
@@ -198,11 +209,12 @@ const BookingHistory = () => {
                 </div>
               </div>
 
+              {/* 중앙: 상세 정보 */}
               <div className="flex-1 flex flex-col gap-3 min-w-0">
                 <div className="flex items-center">
                   <span className="flex items-center gap-1.5 text-xs font-bold text-blue-600 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100/50">
                     <Clock className="w-3.5 h-3.5" />
-                    {getDisplayTime(booking.candidate_times || booking.booking_time)}
+                    {getDisplayDateTime(booking.booking_date, booking.booking_time, booking.candidate_times)}
                   </span>
                 </div>
                 
@@ -215,6 +227,7 @@ const BookingHistory = () => {
                 </div>
               </div>
 
+              {/* 우측: 액션 버튼 영역 */}
               <div className="flex flex-row lg:flex-col items-center lg:items-end justify-end gap-3 flex-shrink-0 lg:w-[140px] pt-4 lg:pt-0 border-t lg:border-t-0 border-slate-100 mt-2 lg:mt-0">
                 {activeTab === 'received' ? (
                   <div className="flex w-full lg:flex-col gap-2">
@@ -250,7 +263,7 @@ const BookingHistory = () => {
           );
         })}
 
-        {/* 대기 내역이 없을 때 공백 뷰 (예쁜 디자인) */}
+        {/* 데이터가 없을 때 */}
         {bookings.length === 0 && (
           <div className="flex flex-col items-center justify-center py-24 bg-slate-50/50 rounded-3xl border border-dashed border-slate-200">
             <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-sm mb-4">
