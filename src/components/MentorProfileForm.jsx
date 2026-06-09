@@ -3,7 +3,7 @@ import ReactQuill from 'react-quill-new';
 import "quill/dist/quill.snow.css";
 import { Upload, Briefcase, MessageSquare, Sparkles, X, Plus, GraduationCap, FileText } from 'lucide-react';
 import ProfileImageUpload from './ProfileImageUpload';
-import TagInput from './TagInput'; // 일반 프로필과 동일한 태그 UI 사용
+import TagInput from './TagInput';
 
 export default function MentorProfileForm({
   formData,
@@ -12,13 +12,17 @@ export default function MentorProfileForm({
   dbEmail,
   mentorResumeFile, 
   setMentorResumeFile,
+  tempCareer, setTempCareer,
+  tempHashtag, setTempHashtag,
+  tempLink, setTempLink,
+  tempKeyword, setTempKeyword,
   handleMentorResumeUpload,
   handleAddArrayItem,
   handleRemoveArrayItem,
+  handleKeyDownArray,
   handleExperienceChange,
   addExperienceField,
   removeExperienceField,
-    
 }) {
 
   const categories = [
@@ -36,7 +40,7 @@ export default function MentorProfileForm({
   ];
   const statuses = ['현직자', '이직자', '프리랜서', '대학생', '취준생'];
 
-  // 💡 ReactQuill 에디터 설정 (기능 유지)
+  // ReactQuill 에디터 설정
   const quillRef = useRef(null);
   const imageHandler = () => {
     const input = document.createElement('input');
@@ -72,7 +76,7 @@ export default function MentorProfileForm({
 
   const formats = ['header', 'bold', 'italic', 'underline', 'strike', 'list', 'align', 'image', 'link'];
 
-  // 💡 드래그 앤 드롭 설정 (기능 유지)
+  // 드래그 앤 드롭 설정
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef(null);
 
@@ -95,10 +99,9 @@ export default function MentorProfileForm({
   return (
     <div className="grid md:grid-cols-3 gap-8 items-start animate-fadeIn font-sans">
       
-      {/* 🟢 일반 프로필과 동일한 왼쪽 고정 사이드바 */}
+      {/* 왼쪽 고정 사이드바 */}
       <div className="md:col-span-1 bg-white rounded-2xl shadow-sm border border-gray-200 p-6 text-center sticky top-24">
         <label className="block text-sm font-bold text-gray-700 mb-4 text-left">프로필 이미지</label>
-        
         <ProfileImageUpload userId={userId} currentImageUrl={formData.profile_image} onUploadSuccess={(newUrl) => setFormData({ ...formData, profile_image: newUrl })} />
         <div className="mt-5 pt-4 border-t border-gray-100 bg-slate-50/50 rounded-xl p-3">
           <p className="text-[11px] text-gray-400 font-medium uppercase">로그인 이메일</p>
@@ -106,12 +109,14 @@ export default function MentorProfileForm({
         </div>
       </div>
 
-      {/* 🟢 오른쪽 입력란 (일반 프로필 UI 박스 디자인 + 멘토 기능 탑재) */}
+      {/* 오른쪽 입력란 */}
       <div className="md:col-span-2 space-y-6">
-        
-        {/* 1. 호스트 활동 정보 (일반 프로필에 없는 직무 정보만) */}
+
+        {/* 1. 기본 정보 및 경력 */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8 space-y-5">
-          <h3 className="text-base font-bold text-gray-900 border-b border-gray-100 pb-3 m-0">호스트 활동 정보</h3>
+          <h3 className="text-base font-bold text-gray-900 border-b border-gray-100 pb-3 m-0 flex items-center gap-2">
+            <Briefcase className="w-4 h-4 text-purple-600" /> 기본 정보 및 경력
+          </h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             <div>
               <label className="block text-xs font-bold text-gray-600 mb-2">현재 상태</label>
@@ -134,9 +139,53 @@ export default function MentorProfileForm({
               </select>
             </div>
           </div>
+
+          <div>
+            <label className="block text-xs font-bold text-gray-600 mb-2">이름 / 닉네임</label>
+            <input
+              type="text"
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }}
+              className="w-full px-4 py-3 border border-gray-300 rounded-xl outline-none focus:border-purple-500 transition text-sm bg-white"
+              placeholder="호스트 활동 시 노출될 이름 혹은 닉네임"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-gray-600 mb-2">현재 직무 및 연차</label>
+            <input
+              type="text"
+              value={formData.mentor_job}
+              onChange={(e) => setFormData({ ...formData, mentor_job: e.target.value })}
+              onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }}
+              className="w-full px-4 py-3 border border-gray-300 rounded-xl outline-none focus:border-purple-500 transition text-sm bg-white"
+              placeholder="예: 시니어 백엔드 엔지니어 (5년차)"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-gray-600 mb-2">주요 경력 <span className="text-gray-400 font-normal text-xs">(최근 순으로 입력 후 Enter)</span></label>
+            <input
+              type="text"
+              value={tempCareer}
+              onChange={(e) => setTempCareer(e.target.value)}
+              onKeyDown={(e) => handleKeyDownArray(e, 'mentor_careers', tempCareer, setTempCareer)}
+              className="w-full px-4 py-3 border border-gray-300 rounded-xl outline-none focus:border-purple-500 transition text-sm bg-white mb-3"
+              placeholder="예: Google (2020 - 현재)"
+            />
+            <div className="flex flex-wrap gap-2">
+              {formData.mentor_careers.map((career, index) => (
+                <span key={index} className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 border border-slate-200 rounded-lg text-xs font-medium text-gray-700">
+                  {career}
+                  <X className="w-3 h-3 cursor-pointer text-gray-400 hover:text-gray-600" onClick={() => handleRemoveArrayItem('mentor_careers', index)} />
+                </span>
+              ))}
+            </div>
+          </div>
         </div>
 
-        {/* 2. 성장 스토리 (ReactQuill 에디터 이식) */}
+        {/* 2. 성장 스토리 (ReactQuill 에디터) */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8 space-y-5">
           <h3 className="text-base font-bold text-gray-900 border-b border-gray-100 pb-3 m-0 flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-amber-500" /> 성장 스토리 (자기소개)
@@ -168,18 +217,28 @@ export default function MentorProfileForm({
           <h3 className="text-base font-bold text-gray-900 border-b border-gray-100 pb-3 m-0 flex items-center gap-2">
             <MessageSquare className="w-4 h-4 text-purple-600" /> 이런 주제로 편하게 이야기 걸어주세요
           </h3>
-          
-          <div className="pt-2">
-            <TagInput 
-              label={<>게스트가 선택할 수 있는 대화 키워드를 입력해 주세요. <span className="text-gray-400 font-normal text-xs">(입력 후 Enter)</span></>}
-              placeholder="예: 이력서 첨삭, 모의면접, 이직 고민"
-              tags={formData.hashtags}              // ← mentor_keywords → hashtags
-              onAdd={(val) => handleAddArrayItem('hashtags', val)}      // ← 필드명 변경
-              onRemove={(idx) => handleRemoveArrayItem('hashtags', idx)} // ← 필드명 변경
+
+          <div>
+            <label className="block text-xs font-bold text-gray-600 mb-2">게스트가 선택할 수 있는 대화 키워드를 입력해 주세요. <span className="text-gray-400 font-normal text-xs">(입력 후 Enter)</span></label>
+            <input
+              type="text"
+              value={tempKeyword}
+              onChange={(e) => setTempKeyword(e.target.value)}
+              onKeyDown={(e) => handleKeyDownArray(e, 'mentor_keywords', tempKeyword, setTempKeyword)}
+              className="w-full px-4 py-3 border border-gray-300 rounded-xl outline-none focus:border-purple-500 transition text-sm bg-white mb-3"
+              placeholder="예: 이력서첨삭, 면접준비 (입력 후 Enter를 쳐주세요!)"
             />
+            <div className="flex flex-wrap gap-2">
+              {(Array.isArray(formData.mentor_keywords) ? formData.mentor_keywords : []).map((kw, index) => (
+                <span key={index} className="flex items-center gap-1.5 px-3 py-1.5 bg-green-50 border border-green-100 rounded-lg text-xs font-semibold text-green-700">
+                  {kw}
+                  <X className="w-3 h-3 cursor-pointer text-green-400 hover:text-green-600" onClick={() => handleRemoveArrayItem('mentor_keywords', index)} />
+                </span>
+              ))}
+            </div>
           </div>
 
-          <div className="pt-4">
+          <div>
             <label className="block text-xs font-bold text-gray-600 mb-2">이런 경험들을 공유해 드릴 수 있어요 <span className="text-gray-400 font-normal text-xs">(경험 상세 설명)</span></label>
             <div className="space-y-3">
               {Array.isArray(formData.mentor_experiences) && formData.mentor_experiences.map((exp) => (
@@ -188,6 +247,7 @@ export default function MentorProfileForm({
                     rows="2"
                     value={exp.text}
                     onChange={(e) => handleExperienceChange(exp.id, e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }}
                     className="flex-1 px-4 py-3 border border-gray-300 rounded-lg outline-none focus:border-purple-500 transition text-sm bg-white resize-none"
                     placeholder="초당 1,000만 개가 넘는 요청을 감당하기 위해 바닥부터 만든..."
                   />
@@ -213,7 +273,7 @@ export default function MentorProfileForm({
           </div>
         </div>
 
-        {/* 4. 링크 및 파일 첨부 (드래그 앤 드롭 이식) */}
+        {/* 4. 링크 및 파일 첨부 (드래그 앤 드롭) */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8 space-y-5">
           <h3 className="text-base font-bold text-gray-900 border-b border-gray-100 pb-3 m-0 flex items-center gap-2">
             <GraduationCap className="w-4 h-4 text-purple-600" /> 링크 및 파일 첨부
@@ -221,7 +281,6 @@ export default function MentorProfileForm({
 
           <div>
             <label className="block text-xs font-bold text-gray-600 mb-2">이력서 등 파일 업로드</label>
-            
             <div 
               className={`mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-dashed rounded-xl transition-colors cursor-pointer
                 ${isDragging ? 'border-purple-500 bg-purple-50' : 'border-gray-300 bg-slate-50 hover:border-purple-400'}`}
@@ -233,14 +292,11 @@ export default function MentorProfileForm({
               <div className="space-y-1 text-center">
                 <Upload className="mx-auto h-8 w-8 text-gray-400 mb-3" />
                 <div className="flex text-sm text-gray-600 justify-center">
-                  <span className="relative font-bold text-purple-600 hover:text-purple-500">
-                    파일 선택하기
-                  </span>
+                  <span className="relative font-bold text-purple-600 hover:text-purple-500">파일 선택하기</span>
                   <p className="pl-1 font-medium">또는 여기로 드래그 앤 드롭</p>
                 </div>
                 <p className="text-xs text-gray-400 mt-2">PDF, DOCX, ZIP (최대 10MB)</p>
               </div>
-              
               <input 
                 type="file" 
                 className="hidden" 
@@ -250,55 +306,51 @@ export default function MentorProfileForm({
               />
             </div>
 
-            {/* 업로드된 파일 표시 */}
             {mentorResumeFile ? (
-  // 새로 선택한 파일
-  <div className="mt-4 flex items-center justify-between p-4 bg-purple-50 border border-purple-100 rounded-xl shadow-sm">
-    <div className="flex items-center gap-3 overflow-hidden">
-      <FileText className="flex-shrink-0 h-5 w-5 text-purple-600" />
-      <div className="overflow-hidden">
-        <p className="text-xs text-purple-400 font-medium mb-0.5">새로 선택한 파일</p>
-        <p className="text-sm font-semibold text-purple-900 truncate">{mentorResumeFile.name}</p>
-      </div>
-    </div>
-    <button
-      type="button"
-      onClick={(e) => {
-        e.stopPropagation();
-        setMentorResumeFile(null);
-        if (fileInputRef.current) fileInputRef.current.value = "";
-      }}
-      className="flex-shrink-0 ml-4 p-1.5 text-purple-400 hover:text-red-500 bg-white rounded-md shadow-sm transition-colors focus:outline-none"
-    >
-      <X className="w-4 h-4" />
-    </button>
-  </div>
-) : formData.portfolio_file_path ? (
-  // DB에 저장된 기존 파일
-  <div className="mt-4 flex items-center justify-between p-4 bg-slate-50 border border-gray-200 rounded-xl shadow-sm">
-    <div className="flex items-center gap-3 overflow-hidden">
-      <FileText className="flex-shrink-0 h-5 w-5 text-gray-400" />
-      <div className="overflow-hidden">
-        <p className="text-xs text-gray-400 font-medium mb-0.5">저장된 파일</p>
-        <p className="text-sm font-semibold text-gray-700 truncate">
-          {formData.portfolio_file_path.split('/').pop()}
-        </p>
-      </div>
-    </div>
-    <button
-      type="button"
-      onClick={(e) => {
-        e.stopPropagation();
-        setFormData({ ...formData, portfolio_file_path: '' });
-      }}
-      className="flex-shrink-0 ml-4 p-1.5 text-gray-400 hover:text-red-500 bg-white rounded-md shadow-sm transition-colors focus:outline-none"
-    >
-      <X className="w-4 h-4" />
-    </button>
-  </div>
-) : null}
+              <div className="mt-4 flex items-center justify-between p-4 bg-purple-50 border border-purple-100 rounded-xl shadow-sm">
+                <div className="flex items-center gap-3 overflow-hidden">
+                  <FileText className="flex-shrink-0 h-5 w-5 text-purple-600" />
+                  <div className="overflow-hidden">
+                    <p className="text-xs text-purple-400 font-medium mb-0.5">새로 선택한 파일</p>
+                    <p className="text-sm font-semibold text-purple-900 truncate">{mentorResumeFile.name}</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setMentorResumeFile(null);
+                    if (fileInputRef.current) fileInputRef.current.value = "";
+                  }}
+                  className="flex-shrink-0 ml-4 p-1.5 text-purple-400 hover:text-red-500 bg-white rounded-md shadow-sm transition-colors focus:outline-none"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            ) : formData.portfolio_file_path ? (
+              <div className="mt-4 flex items-center justify-between p-4 bg-slate-50 border border-gray-200 rounded-xl shadow-sm">
+                <div className="flex items-center gap-3 overflow-hidden">
+                  <FileText className="flex-shrink-0 h-5 w-5 text-gray-400" />
+                  <div className="overflow-hidden">
+                    <p className="text-xs text-gray-400 font-medium mb-0.5">저장된 파일</p>
+                    <p className="text-sm font-semibold text-gray-700 truncate">
+                      {formData.portfolio_file_path.split('/').pop()}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setFormData({ ...formData, portfolio_file_path: '' });
+                  }}
+                  className="flex-shrink-0 ml-4 p-1.5 text-gray-400 hover:text-red-500 bg-white rounded-md shadow-sm transition-colors focus:outline-none"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            ) : null}
           </div>
-
         </div>
 
       </div>

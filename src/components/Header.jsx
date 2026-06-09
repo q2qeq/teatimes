@@ -5,15 +5,14 @@ import axios from 'axios';
 
 const Header = ({ isLoggedIn, setIsLoggedIn, userName }) => {
   const navigate = useNavigate();
-  const location = useLocation(); 
+  const location = useLocation();
   
   const [currentName, setCurrentName] = useState('회원');
   const [isMentor, setIsMentor] = useState(false); 
 
   const [notifications, setNotifications] = useState([]); 
   const [hasUnread, setHasUnread] = useState(false);       
-  const [isOpen, setIsOpen] = useState(false);
-
+  const [isOpen, setIsOpen] = useState(false);             
   const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://48.211.169.52:8000';
 
   useEffect(() => {
@@ -74,21 +73,79 @@ const Header = ({ isLoggedIn, setIsLoggedIn, userName }) => {
     return () => clearInterval(interval);
   }, [isLoggedIn]);
 
-  const handleNotificationClick = async (id) => {
+  const handleNotificationClick = async (notif) => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`${BACKEND_URL}/api/notifications/${id}/read`, {
+      
+      const response = await fetch(`${BACKEND_URL}/api/notifications/${notif.id}/read`, {
         method: 'PUT',
         headers: { 'Authorization': `Bearer ${token}` }
       });
-
-      if (response.ok) {
-        const updated = notifications.map(n => n.id === id ? { ...n, is_read: true } : n);
-        setNotifications(updated);
-        setHasUnread(updated.some(n => !n.is_read));
+      
+      if (!response.ok) {
+        console.warn(`읽음 처리 서버 응답 에러: ${response.status}`);
+      } else {
+        setNotifications(prev => 
+          prev.map(n => n.id === notif.id ? { ...n, is_read: true } : n)
+        );
       }
     } catch (error) {
-      console.error("❌ 알림 읽음 처리 실패:", error);
+      console.error("알림 읽음 처리 통신 실패:", error);
+    }
+
+    const targetBookingId = notif.bookingId || notif.booking_id;
+    const msg = notif.message || ""; 
+
+    if (notif.type === 'BOOKING_REQUEST' || msg.includes('신청') || msg.includes('요청')) {
+      navigate('/dashboard', { 
+        state: { activeTab: 'history', subTab: 'received', bookingId: targetBookingId } 
+      });
+      setIsOpen(false); 
+    } 
+    else if (notif.type === 'BOOKING_CONFIRMED' || msg.includes('확정')) {
+      navigate('/dashboard', { 
+        state: { activeTab: 'history', subTab: 'requested', bookingId: targetBookingId } 
+      });
+      setIsOpen(false); 
+    } 
+  };
+
+  // 🌟 2. 깃 충돌 해결 (삭제 기능 복구)
+  const handleDeleteNotification = async (e, id) => {
+    e.stopPropagation(); 
+    setNotifications(prev => prev.filter(n => n.id !== id));
+    
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${BACKEND_URL}/api/notifications/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (!response.ok) {
+        console.error(`서버 응답 에러 (${response.status}): 개별 삭제 실패`);
+      }
+    } catch (error) {
+      console.error("❌ 알림 영구 삭제 중 에러 발생:", error);
+    }
+  };
+
+  const handleDeleteAll = async (e) => {
+    e.stopPropagation();
+    setNotifications([]);
+    
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${BACKEND_URL}/api/notifications/all`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (!response.ok) {
+        console.error(`서버 응답 에러 (${response.status}): 전체 삭제 실패`);
+      }
+    } catch (error) {
+      console.error("❌ 알림 전체 영구 삭제 중 에러 발생:", error);
     }
   };
 
@@ -197,6 +254,7 @@ const Header = ({ isLoggedIn, setIsLoggedIn, userName }) => {
                     )}
                   </div>
 
+                  
                   <div className="max-h-60 overflow-y-auto">
                     {notifications.length === 0 ? (
                       <div className="px-4 py-8 text-center text-sm text-gray-400">새로운 알림이 없습니다.</div>
@@ -204,12 +262,11 @@ const Header = ({ isLoggedIn, setIsLoggedIn, userName }) => {
                       notifications.map((notif) => (
                         <div 
                           key={notif.id}
-                          onClick={() => handleNotificationClick(notif.id)}
+                          onClick={() => handleNotificationClick(notif)}
                           className={`group relative px-4 py-3 text-xs border-b border-gray-50 transition cursor-pointer hover:bg-gray-50 ${!notif.is_read ? 'bg-blue-50/60 font-semibold' : 'opacity-60'}`}
                         >
                           <p className="m-0 text-gray-700 pr-6">{notif.message}</p>
                           <span className="text-[10px] text-gray-400 block mt-1">방금 전</span>
-
                           <button
                             onClick={(e) => handleDeleteNotification(e, notif.id)}
                             className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-full opacity-0 group-hover:opacity-100 transition-all bg-transparent border-0 cursor-pointer"
@@ -221,10 +278,8 @@ const Header = ({ isLoggedIn, setIsLoggedIn, userName }) => {
                       ))
                     )}
                   </div>
-                </div>
-              )}
-
-              <span 
+                  
+                <span 
                 onClick={() => navigate('/dashboard')} 
                 className="cursor-pointer text-sm font-bold text-amber-300 hover:text-amber-200 transition"
                 title="마이 대시보드로 이동"

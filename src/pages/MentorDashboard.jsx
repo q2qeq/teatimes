@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import {
   LayoutDashboard, Calendar, MessageSquare, User,
-  TrendingUp, DollarSign, Clock, Repeat, Star,
+  DollarSign, Clock, Repeat, Star,
   BookOpen, Award, ChevronRight, Coffee, Users,
   Heart, ArrowUpRight, Sparkles, Bell
 } from 'lucide-react';
@@ -24,64 +24,12 @@ function getUserIdFromToken() {
   }
 }
 
-// ── 서브 컴포넌트 ────────────────────────────────────────────────────
-function StatCard({ icon: Icon, label, value, accent, sub }) {
-  return (
-    <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
-      <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-3 ${accent}`}>
-        <Icon className="w-5 h-5 text-white" />
-      </div>
-      <div className="text-2xl font-bold text-[#1a2332] mb-0.5">{value}</div>
-      <div className="text-xs text-gray-500">{label}</div>
-      {sub && <div className="text-xs text-emerald-500 mt-1 font-medium">{sub}</div>}
-    </div>
-  );
-}
-
-function SectionHeader({ title, action, onAction }) {
-  return (
-    <div className="flex items-center justify-between mb-4">
-      <h2 className="text-lg font-bold text-[#1a2332]">{title}</h2>
-      {action && (
-        <button onClick={onAction} className="text-xs font-semibold text-blue-500 hover:text-blue-600 flex items-center gap-1">
-          {action} <ChevronRight className="w-3 h-3" />
-        </button>
-      )}
-    </div>
-  );
-}
-
-function EmptyState({ icon: Icon, message, cta, onCta }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-10 text-center">
-      <div className="w-12 h-12 bg-gray-100 rounded-2xl flex items-center justify-center mb-3">
-        <Icon className="w-6 h-6 text-gray-400" />
-      </div>
-      <p className="text-sm text-gray-400 mb-3">{message}</p>
-      {cta && (
-        <button onClick={onCta} className="text-xs font-semibold text-blue-500 hover:text-blue-600 border border-blue-200 px-4 py-2 rounded-full hover:bg-blue-50 transition-colors">
-          {cta}
-        </button>
-      )}
-    </div>
-  );
-}
-
-// 별점 표시
-function StarRating({ rating }) {
-  return (
-    <div className="flex items-center gap-0.5">
-      {[1,2,3,4,5].map(i => (
-        <Star key={i} className={`w-3.5 h-3.5 ${i <= Math.round(rating) ? 'text-amber-400 fill-amber-400' : 'text-gray-200 fill-gray-200'}`} />
-      ))}
-      <span className="text-xs text-gray-500 ml-1">{rating}</span>
-    </div>
-  );
-}
+// ... (StatCard, SectionHeader, EmptyState, StarRating 컴포넌트는 그대로 두세요)
 
 // ── 메인 ─────────────────────────────────────────────────────────────
 export default function Dashboard() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [loading, setLoading] = useState(true);
 
@@ -91,13 +39,20 @@ export default function Dashboard() {
   // 멘토 데이터
   const [isMentor, setIsMentor] = useState(false);
   const [mentorStats, setMentorStats] = useState(null);
-  const [upcomingChats, setUpcomingChats] = useState([]);
+  const [upcomingChats, setUpcomingChats] = useState([]); // 통합됨
   const [recentReviews, setRecentReviews] = useState([]);
 
   // 멘티 데이터
   const [menteeStats, setMenteeStats] = useState(null);
   const [upcomingBookings, setUpcomingBookings] = useState([]);
   const [mentorHistory, setMentorHistory] = useState([]);
+
+  // 탭 이동 관련 useEffect
+  useEffect(() => {
+    if (location.state && location.state.activeTab) {
+      setActiveTab(location.state.activeTab);
+    }
+  }, [location.state]);
 
   useEffect(() => {
     const uid = getUserIdFromToken();

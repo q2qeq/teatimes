@@ -1,12 +1,20 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom'; 
 import { Calendar, Clock, MessageSquare, CheckCircle, XCircle } from 'lucide-react';
 
 const BookingHistory = () => {
-  // 💡 상태 및 기능 로직 (완벽하게 기존과 동일하게 유지)
+  const location = useLocation(); 
   const [activeTab, setActiveTab] = useState('requested');
   const [bookings, setBookings] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   
+  // Header(알림)에서 넘어온 subTab 상태가 있으면 해당 탭을 엽니다
+  useEffect(() => {
+    if (location.state && location.state.subTab) {
+      setActiveTab(location.state.subTab);
+    }
+  }, [location.state]);
+
   const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://48.211.169.52:8000';
 
   let currentUserId = localStorage.getItem('userId') || localStorage.getItem('id') || localStorage.getItem('user_id');
@@ -40,6 +48,7 @@ const BookingHistory = () => {
       const baseUrl = `${BACKEND_URL}/api/booking`;
       
       try {
+        // activeTab 상태에 따라 '신청받은' 또는 '신청한' API 엔드포인트 자동 분기
         const endpoint = activeTab === 'received' 
           ? `${baseUrl}/mentor/${currentUserId}` 
           : `${baseUrl}/mentee/${currentUserId}`;
@@ -102,6 +111,15 @@ const BookingHistory = () => {
     }
   };
 
+  const getDisplayTime = (timeData) => {
+    try {
+      const parsed = JSON.parse(timeData);
+      return Array.isArray(parsed) ? parsed[0] : timeData;
+    } catch {
+      return timeData;
+    }
+  };
+
   const getDisplayDateTime = (dateData, timeData, candidateTimes) => {
     let cleanTime = timeData || candidateTimes || '';
     if (typeof cleanTime === 'string') {
@@ -120,11 +138,10 @@ const BookingHistory = () => {
     );
   }
 
-  // 🚀 여기서부터 UI 전면 개편 🚀
   return (
     <div className="font-sans w-full max-w-5xl">
       
-      {/* 1. 상단 탭 버튼 (iOS 세그먼트 컨트롤 스타일로 세련되게 변경) */}
+      {/* 상단 탭 버튼 */}
       <div className="flex bg-slate-100 p-1.5 rounded-2xl w-fit mb-8 shadow-inner">
         <button
           onClick={() => setActiveTab('requested')}
@@ -144,7 +161,7 @@ const BookingHistory = () => {
         </button>
       </div>
 
-      {/* 2. 페이지 타이틀 영역 */}
+      {/* 페이지 타이틀 */}
       <div className="flex items-center gap-3 mb-8">
         <div className="p-3 bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-xl shadow-md">
           <Calendar className="w-6 h-6" />
@@ -161,7 +178,7 @@ const BookingHistory = () => {
         </div>
       </div>
 
-      {/* 3. 예약 카드 리스트 (입체감 있는 그리드/리스트 혼합 레이아웃) */}
+      {/* 예약 카드 리스트 */}
       <div className="space-y-5">
         {Array.isArray(bookings) && bookings.map((booking) => {
           const displayName = booking.partner_name || booking.mentee_name || "알 수 없음";
@@ -182,7 +199,6 @@ const BookingHistory = () => {
                     alt={displayName}
                     className="w-16 h-16 rounded-full object-cover ring-4 ring-slate-50 group-hover:ring-blue-50 transition-colors bg-gray-100"
                   />
-                  {/* 작은 초록색 온라인 닷 추가 (디테일) */}
                   <span className="absolute bottom-0 right-0 w-4 h-4 bg-green-400 border-2 border-white rounded-full"></span>
                 </div>
                 <div>
@@ -193,9 +209,8 @@ const BookingHistory = () => {
                 </div>
               </div>
 
-              {/* 중앙: 상세 정보 (시간 뱃지 + 질문 말풍선) */}
+              {/* 중앙: 상세 정보 */}
               <div className="flex-1 flex flex-col gap-3 min-w-0">
-                {/* 시간 뱃지 */}
                 <div className="flex items-center">
                   <span className="flex items-center gap-1.5 text-xs font-bold text-blue-600 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100/50">
                     <Clock className="w-3.5 h-3.5" />
@@ -203,7 +218,6 @@ const BookingHistory = () => {
                   </span>
                 </div>
                 
-                {/* 질문 말풍선 */}
                 <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 relative group-hover:bg-slate-100/70 transition-colors">
                   <MessageSquare className="w-4 h-4 text-slate-300 absolute top-4 right-4" />
                   <p className="m-0 text-sm text-slate-700 leading-relaxed pr-8 line-clamp-2">
@@ -249,7 +263,7 @@ const BookingHistory = () => {
           );
         })}
 
-        {/* 4. 데이터가 없을 때 텅 빈 상태 뷰 (디자인 업그레이드) */}
+        {/* 데이터가 없을 때 */}
         {bookings.length === 0 && (
           <div className="flex flex-col items-center justify-center py-24 bg-slate-50/50 rounded-3xl border border-dashed border-slate-200">
             <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-sm mb-4">

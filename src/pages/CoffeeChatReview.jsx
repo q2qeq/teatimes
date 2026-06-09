@@ -1,44 +1,50 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Star, Send } from 'lucide-react';
+import { Star, Send, Loader2 } from 'lucide-react';
 import axios from 'axios';
 
 export default function CoffeeChatReview() {
   const { chatId } = useParams();
   const navigate = useNavigate();
+  
   const [rating, setRating] = useState(0);
   const [hoveredRating, setHoveredRating] = useState(0);
-  const [review, setReview] = useState('');
+  const [userReview, setUserReview] = useState('');  // 유저가 직접 쓰는 리뷰
+  const [summary, setSummary] = useState('');         // AI 대화 요약본
   const [booking, setBooking] = useState(null);
   const [session, setSession] = useState(null);
+  const [isGenerating, setIsGenerating] = useState(true); // AI 로딩 상태
+
   const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://48.211.169.52:8000';
 
-useEffect(() => {
-  const userId = localStorage.getItem('userId');
-  if (!userId) return;
+  useEffect(() => {
+    const userId = localStorage.getItem('userId');
+    if (!userId) return;
 
-  // 예약 정보 가져오기
-  axios.get(`${BACKEND_URL}/api/booking/${userId}`)
-    .then(res => {
-      const found = res.data.find(b => String(b.id) === String(chatId));
-      if (found) setBooking(found);
-    })
-    .catch(err => console.error(err));
+    // 예약 정보 가져오기
+    axios.get(`${BACKEND_URL}/api/booking/${userId}`)
+      .then(res => {
+        const found = res.data.find(b => String(b.id) === String(chatId));
+        if (found) setBooking(found);
+      })
+      .catch(err => console.error(err));
 
-  // 요약 생성 먼저 → 그다음 세션 정보 가져오기
-  axios.post(`${BACKEND_URL}/api/chat-session/${chatId}/generate-summary`,{})
-    .then(() => {
-      return axios.get(`${BACKEND_URL}/api/chat-session/${chatId}`);
-    })
-    .then(res => {
-      setSession(res.data);
-      if (res.data.ai_summary) {
-        setReview(res.data.ai_summary);
-      }
-    })
-    .catch(err => console.error(err));
+    // 요약 생성 먼저 → 그다음 세션 정보 가져오기
+    setIsGenerating(true);
+    axios.post(`${BACKEND_URL}/api/chat-session/${chatId}/generate-summary`, {})
+      .then(() => {
+        return axios.get(`${BACKEND_URL}/api/chat-session/${chatId}`);
+      })
+      .then(res => {
+        setSession(res.data);
+        if (res.data.ai_summary) {
+          setSummary(res.data.ai_summary);
+        }
+      })
+      .catch(err => console.error(err))
+      .finally(() => setIsGenerating(false));
 
-}, [chatId]);
+  }, [chatId]);
 
   const handleSubmit = async () => {
     if (rating === 0) {
@@ -53,7 +59,7 @@ useEffect(() => {
         user_id: Number(userId),
         mentor_id: booking?.mentor_id || 0,
         rating: rating,
-        review: review
+        review: userReview
       });
       alert('리뷰가 성공적으로 제출되었습니다!');
       navigate('/coffee-chats');
@@ -67,6 +73,7 @@ useEffect(() => {
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 flex items-center justify-center p-6">
       <div className="w-full max-w-2xl">
         <div className="bg-white rounded-3xl shadow-2xl p-12">
+
           {/* 헤더 */}
           <div className="text-center mb-12">
             <div className="w-24 h-24 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white font-bold text-3xl mx-auto mb-6">
@@ -78,7 +85,6 @@ useEffect(() => {
             <p className="text-gray-600">
               {booking?.mentor_name || '멘토'} 님과의 세션이 완료되었습니다
             </p>
-            {/* 진행 시간 표시 */}
             {session?.duration_sec && (
               <p className="text-sm text-gray-400 mt-1">
                 진행 시간: {Math.floor(session.duration_sec / 60)}분 {session.duration_sec % 60}초
@@ -121,6 +127,8 @@ useEffect(() => {
           <div className="bg-gray-50 rounded-xl p-6 mb-6">
             <h3 className="font-bold text-gray-900 mb-3">리뷰</h3>
             <textarea
+              value={userReview}
+              onChange={(e) => setUserReview(e.target.value)}
               className="w-full h-32 p-3 text-sm text-gray-700 bg-white border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
               placeholder="멘토와의 대화는 어떠셨나요?"
             />
@@ -129,8 +137,9 @@ useEffect(() => {
           {/* 대화내용 요약본 */}
           <div className="mb-6">
             <div className="flex items-center justify-between mb-3">
-              <label className="block font-bold text-gray-900">
+              <label className="flex items-center gap-2 font-bold text-gray-900">
                 대화내용 요약본
+                {isGenerating && <Loader2 className="w-4 h-4 animate-spin text-blue-500" />}
               </label>
               <a 
                 href={`${BACKEND_URL}/api/chat-session/${chatId}/summary-pdf`}
@@ -140,19 +149,22 @@ useEffect(() => {
                 📄 PDF 다운로드
               </a>
             </div>
-              <textarea
-                  value={review}
-                  onChange={(e) => setReview(e.target.value)}
-                  rows={6}
-                  placeholder="대화 내용을 요약해주세요"
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl outline-none focus:border-blue-500 resize-none whitespace-pre-wrap"
-                />
+            <textarea
+              value={isGenerating ? 'AI가 대화 내용을 안전하게 마스킹하고 요약 중입니다...' : summary}
+              onChange={(e) => setSummary(e.target.value)}
+              rows={6}
+              placeholder="대화 내용을 요약해주세요"
+              className={`w-full px-4 py-3 border-2 rounded-xl outline-none focus:border-blue-500 resize-none whitespace-pre-wrap ${
+                isGenerating ? 'border-gray-100 bg-gray-50 text-gray-400' : 'border-gray-200 text-gray-700'
+              }`}
+            />
           </div>
 
           {/* AI 어드바이스 */}
           <div className="mb-8">
-            <label className="block font-bold text-gray-900 mb-3">
+            <label className="flex items-center gap-2 font-bold text-gray-900 mb-3">
               AI 어드바이스
+              {isGenerating && <Loader2 className="w-4 h-4 animate-spin text-purple-500" />}
             </label>
             <textarea
               rows={6}
@@ -161,7 +173,7 @@ useEffect(() => {
               className="w-full px-4 py-3 border-2 border-gray-100 bg-gray-50 rounded-xl outline-none resize-none text-gray-500"
             />
             <p className="text-sm text-gray-500 mt-2">
-              {review.length} / 500 자
+              {userReview.length} / 500 자
             </p>
           </div>
 
@@ -173,6 +185,7 @@ useEffect(() => {
             <Send className="w-5 h-5" />
             리뷰 제출하기
           </button>
+
         </div>
       </div>
     </div>
