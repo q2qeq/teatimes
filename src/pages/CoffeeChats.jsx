@@ -36,6 +36,7 @@ export default function CoffeeChats() {
 
   const handleJoinChat = (e, chatId) => {
     e.stopPropagation(); // 카드 클릭 이벤트 막기
+    console.log("입장 클릭된 방 ID:", chatId); // 터미널에 이게 찍힐 거예요
     navigate(`/coffee-chat/${chatId}`);
   };
 

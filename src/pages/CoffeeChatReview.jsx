@@ -13,29 +13,32 @@ export default function CoffeeChatReview() {
   const [session, setSession] = useState(null);
   const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://48.211.169.52:8000';
 
-  useEffect(() => {
-    const userId = localStorage.getItem('userId');
-    if (!userId) return;
+useEffect(() => {
+  const userId = localStorage.getItem('userId');
+  if (!userId) return;
 
-    // 예약 정보 가져오기
-    axios.get(`${BACKEND_URL}/api/bookings/${userId}`)
-      .then(res => {
-        const found = res.data.find(b => String(b.id) === String(chatId));
-        if (found) setBooking(found);
-      })
-      .catch(err => console.error(err));
+  // 예약 정보 가져오기
+  axios.get(`${BACKEND_URL}/api/booking/${userId}`)
+    .then(res => {
+      const found = res.data.find(b => String(b.id) === String(chatId));
+      if (found) setBooking(found);
+    })
+    .catch(err => console.error(err));
 
-    // 세션 정보 가져오기
-    axios.get(`${BACKEND_URL}/api/chat-session/${chatId}`)
-      .then(res => {
-        setSession(res.data);
-        // AI 요약본 있으면 자동으로 채우기
-        if (res.data.ai_summary) {
-          setReview(res.data.ai_summary);
-        }
-      })
-      .catch(err => console.error(err));
-  }, [chatId]);
+  // 요약 생성 먼저 → 그다음 세션 정보 가져오기
+  axios.post(`${BACKEND_URL}/api/chat-session/${chatId}/generate-summary`,{})
+    .then(() => {
+      return axios.get(`${BACKEND_URL}/api/chat-session/${chatId}`);
+    })
+    .then(res => {
+      setSession(res.data);
+      if (res.data.ai_summary) {
+        setReview(res.data.ai_summary);
+      }
+    })
+    .catch(err => console.error(err));
+
+}, [chatId]);
 
   const handleSubmit = async () => {
     if (rating === 0) {
@@ -125,16 +128,25 @@ export default function CoffeeChatReview() {
 
           {/* 대화내용 요약본 */}
           <div className="mb-6">
-            <label className="block font-bold text-gray-900 mb-3">
-              대화내용 요약본
-            </label>
-            <textarea
-              value={review}
-              onChange={(e) => setReview(e.target.value)}
-              rows={6}
-              placeholder="대화 내용을 요약해주세요"
-              className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl outline-none focus:border-blue-500 resize-none"
-            />
+            <div className="flex items-center justify-between mb-3">
+              <label className="block font-bold text-gray-900">
+                대화내용 요약본
+              </label>
+              <a 
+                href={`${BACKEND_URL}/api/chat-session/${chatId}/summary-pdf`}
+                download="커피챗_요약리포트.pdf"
+                className="flex items-center gap-1 px-4 py-1.5 border-2 border-blue-600 text-blue-600 rounded-lg text-sm font-semibold hover:bg-blue-50"
+              >
+                📄 PDF 다운로드
+              </a>
+            </div>
+              <textarea
+                  value={review}
+                  onChange={(e) => setReview(e.target.value)}
+                  rows={6}
+                  placeholder="대화 내용을 요약해주세요"
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl outline-none focus:border-blue-500 resize-none whitespace-pre-wrap"
+                />
           </div>
 
           {/* AI 어드바이스 */}

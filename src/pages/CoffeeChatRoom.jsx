@@ -214,14 +214,25 @@ export default function CoffeeChatRoom() {
   };
 
   const handleEndCall = async () => {
-    await hangUp();
-    chatWsRef.current?.close();
-    try {
-      if (session?.session_id)
-        await axios.post(`${BACKEND_URL}/api/chat-session/end/${session.session_id}`);
-    } catch (err) {}
-    navigate(`/coffee-chat-review/${chatId}`);
-  };
+      await hangUp();
+      chatWsRef.current?.close();
+      try {
+        // 1. 방 종료 상태로 변경
+        if (session?.session_id) {
+          await axios.post(`${BACKEND_URL}/api/chat-session/end/${session.session_id}`);
+        }
+        
+        // 2. ✅ [여기가 핵심!] 리뷰 화면으로 넘어가기 전에 요약본 생성 API 찌르기!
+        console.log("요약본 생성 중...");
+        await axios.post(`${BACKEND_URL}/api/chat-session/${chatId}/generate-summary`, {});
+        
+      } catch (err) {
+        console.error("종료 또는 요약본 생성 중 에러 발생:", err);
+      }
+      
+      // 3. 생성이 끝나면 리뷰 화면으로 이동
+      navigate(`/coffee-chat-review/${chatId}`);
+    };
 
   // ✅ [4번 수정] 채팅 전송: WS로 서버에 발송 + 낙관적 UI 업데이트
   const handleSendMessage = (e) => {
