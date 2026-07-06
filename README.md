@@ -55,4 +55,4 @@ VITE_API_BASE_URL=http://localhost:8000
 npm run dev
 
 
-Backend 레포지토리는 [여기(https://github.com/sjlee5125/coffee-chat.git)]에서 확인할 수 있습니다.
+Backend 레포지토리는 여기(https://github.com/sjlee5125/coffee-chat.git) 에서 확인할 수 있습니다.
