@@ -2,12 +2,16 @@ import React, { useState, useRef, useMemo, useEffect } from 'react';
 import ReactQuill from 'react-quill-new';
 import "quill/dist/quill.snow.css";
 import { useSearchParams } from 'react-router-dom';
-
+import axios from 'axios';
+import { User } from 'lucide-react';
 const MentorRegistration = () => {
   const [searchParams] = useSearchParams();
   
-  const activeUserId = localStorage.getItem('userId') || searchParams.get('id') || "1";
-  const [userId, setUserId] = useState(parseInt(activeUserId));
+  const rawUserId = localStorage.getItem('userId');
+  const validUserId = (rawUserId && rawUserId !== "undefined" && rawUserId !== "null") 
+    ? rawUserId 
+    : (searchParams.get('id') || "1");
+  const [userId, setUserId] = useState(parseInt(validUserId));
 
   const [experiences, setExperiences] = useState([""]);
 
@@ -28,6 +32,7 @@ const MentorRegistration = () => {
   const [introduction, setIntroduction] = useState('');
   const quillRef = useRef(null);
 
+  // 💡 수정된 ReactQuill 에디터 이미지 핸들러 (Azure Blob 업로드 방식)
   const imageHandler = () => {
     const input = document.createElement('input');
     input.setAttribute('type', 'file');
@@ -36,14 +41,34 @@ const MentorRegistration = () => {
 
     input.onchange = async () => {
       const file = input.files[0];
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = () => {
-        const range = quillRef.current.getEditor().getSelection();
+      if (!file) return;
+
+      // 1. 파일을 FormData에 담기
+      const uploadData = new FormData();
+      uploadData.append('file', file);
+
+      try {
+        // 2. 백엔드의 에디터 전용 업로드 API로 전송 (앞서 만든 API 재사용)
+        const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://48.211.169.52:8000';
+        const response = await axios.post(`${BACKEND_URL}/api/upload/editor-image`, uploadData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        });
+
+        // 3. 백엔드에서 받아온 Azure URL
+        const imageUrl = response.data.url;
+
+        // 4. 에디터 커서 위치에 이미지 URL 삽입
         const quill = quillRef.current.getEditor();
-        quill.insertEmbed(range.index, 'image', reader.result); 
+        const range = quill.getSelection(true);
+        quill.insertEmbed(range.index, 'image', imageUrl);
         quill.setSelection(range.index + 1);
-      };
+
+      } catch (error) {
+        console.error("에디터 이미지 업로드 실패:", error);
+        alert("이미지 업로드에 실패했습니다. 파일 용량이나 네트워크 상태를 확인해주세요.");
+      }
     };
   };
 
@@ -63,7 +88,6 @@ const MentorRegistration = () => {
     },
   }), []);
 
-  // 💡 Quill 불릿 에러를 방지하는 표준 규격 포맷 선언
   const formats = [
     'header', 'bold', 'italic', 'underline', 'strike',
     'list', 'align', 'image', 'link',
@@ -81,12 +105,12 @@ const MentorRegistration = () => {
   };
 
   const [basicInfo, setBasicInfo] = useState({ 
-  name: '', 
-  job: '', 
-  main_category: '', 
-  sub_category: '',
-  status: ''
-});
+    name: '', 
+    job: '', 
+    main_category: '', 
+    sub_category: '',
+    status: ''
+  });
 
   const categories = [
     {
@@ -285,75 +309,126 @@ const MentorRegistration = () => {
   };
 
   // =========================================================
-  // 💡 1. [데이터 로드] 원격 클라우드 IP 타겟팅 및 연동 동기화
+  // 💡 [핵심 수정!] users 테이블에서 진짜 프로필 데이터 끌고오기
   // =========================================================
   useEffect(() => {
-    if (!userId) {
-      console.warn("로그인된 유저 ID를 찾을 수 없습니다.");
-      return; 
+    if (!userId) return;
+
+    // 이름 임시 복구 (만약 통신 지연 시 빈칸 방지용)
+    const savedName = localStorage.getItem('userName');
+    if (savedName) {
+      setBasicInfo(prev => ({ ...prev, name: savedName }));
     }
 
-    const fetchSharedUserData = async () => {
-        try {
-          const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://48.211.169.52:8000';
+    const fetchRealUserData = async () => {
+      try {
+        const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://48.211.169.52:8000';
+        
+        // 🚨 여기가 가장 중요합니다! mentor/dashboard가 아니라 진짜 유저 정보를 주는 API를 호출합니다.
+        const url = `${BACKEND_URL}/api/users/${userId}`;
+        
+        const response = await axios.get(url);
+        const userData = response.data;
 
-            // 2. axios 요청에서 하드코딩된 주소를 BACKEND_URL 변수로 교체
-            const response = await axios.get(`${BACKEND_URL}/api/mentor/dashboard/${currentUserId}`);
-        if (response.ok) {
-          const userData = await response.json();
-          setBasicInfo(prev => ({ ...prev, name: userData.name || '' }));
-          
-          if (userData.hashtags) {
-            setHashtags(userData.hashtags.split(',').filter(Boolean));
-          }
-          
-          if (userData.portfolio_url) {
-            try {
-              setLinks(JSON.parse(userData.portfolio_url));
-            } catch (e) {
-              // 쉼표 문자열로 저장되어 있을 경우 분리 바인딩 백업
-              setLinks(userData.portfolio_url.split(',').filter(Boolean));
-            }
-          }
+        if (!userData || Object.keys(userData).length === 0) return;
+
+        // 1. 이름
+        if (userData.name) {
+          setBasicInfo(prev => ({ ...prev, name: userData.name }));
         }
+
+        // 공통 파싱 함수 (DB에 JSON으로 저장되어있든 콤마로 저장되어있든 다 풀어줍니다)
+        const safeParseArray = (rawStr) => {
+          if (!rawStr) return [];
+          try {
+            const parsed = JSON.parse(rawStr);
+            const arr = Array.isArray(parsed) ? parsed : String(rawStr).split(',').filter(Boolean);
+            
+            // 💡 [핵심] 0,1,2 로 쪼개진 이상한 객체가 오면 'text'만 쏙 뽑아내서 순수 글자로 바꿉니다.
+            return arr.map(item => {
+              if (typeof item === 'object' && item !== null) {
+                return item.text || item.title || item.value || '';
+              }
+              return item;
+            });
+          } catch (e) {
+            return String(rawStr).split(',').filter(Boolean);
+          }
+        };
+
+        // 2. 해시태그
+        if (userData.hashtags) {
+          setHashtags(safeParseArray(userData.hashtags));
+        }
+
+        // 3. 주요 경력 (컬럼명이 experience일 수 있음)
+        if (userData.experience) {
+          setExperiences(safeParseArray(userData.experience));
+        }
+
+        // 4. 포트폴리오/링크
+        if (userData.portfolio_url) {
+          setLinks(safeParseArray(userData.portfolio_url));
+        }
+
       } catch (error) {
-        console.error("공유 프로필 데이터를 불러오는 중 에러 발생:", error);
+        console.error("유저 정보를 불러오는데 실패했습니다.", error);
       }
     };
-    fetchSharedUserData();
+    
+    fetchRealUserData();
   }, [userId]);
 
 
   // =========================================================
-  // 💡 2. [데이터 전송] 꼬이던 JSON 문자열 포맷 해제 및 다이렉트 연동
+  // 💡 [데이터 전송] 백엔드 규격에 맞춰 전송
+  // =========================================================
+// =========================================================
+  // 💡 [데이터 전송] Azure 업로드 후 백엔드 규격에 맞춰 전송
   // =========================================================
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // 🟢 [정밀 교정] JSON.stringify 껍데기를 벗겨내고 순수 문자열 형태로 포장합니다.
-    const targetUrl = links.length > 0 ? links.join(',') : '';
-    const targetFilePath = attachedFiles.length > 0 ? attachedFiles[0].name : '';
-
-    const submitData = {
-      name: basicInfo.name,
-      status: basicInfo.status,
-      main_category: basicInfo.main_category,
-      sub_category: basicInfo.sub_category,
-      hashtags: hashtags.join(','),
-      
-      // 💡 컬럼 스펙에 100% 대응하도록 가방 래핑 수정 완료!
-      portfolio_url: targetUrl,          
-      portfolio_file_path: targetFilePath,  
-
-      job_title: basicInfo.job,                  
-      career_history: JSON.stringify(histories),  
-      mentor_intro: introduction,                 
-      mentoring_topics: JSON.stringify(topics),         
-      detailed_experience: JSON.stringify(experiences)
-    };
+    let finalFileUrl = ''; // 최종적으로 DB에 들어갈 파일 URL
 
     try {
-      const response = await fetch(`http://48.211.169.52:8000/api/mentor/register/${userId}`, {
+      const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://48.211.169.52:8000';
+
+      // 🌟 1. 이력서/포트폴리오 파일이 첨부되어 있다면, 폼 제출 전에 파일부터 백엔드로 올립니다.
+      if (attachedFiles.length > 0) {
+        const fileFormData = new FormData();
+        fileFormData.append('file', attachedFiles[0]);
+
+        const uploadRes = await axios.post(`${BACKEND_URL}/api/upload/file`, fileFormData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        
+        // 백엔드가 Azure에 올린 후 반환해준 URL을 변수에 저장합니다.
+        finalFileUrl = uploadRes.data.url; 
+      }
+
+      // 🌟 2. 파일 URL을 포함해서 최종 JSON 데이터를 구성합니다.
+      const targetUrl = links.length > 0 ? links.join(',') : '';
+
+      const submitData = {
+        name: basicInfo.name,
+        status: basicInfo.status,
+        main_category: basicInfo.main_category,
+        sub_category: basicInfo.sub_category,
+        hashtags: hashtags.join(','),
+        
+        portfolio_url: targetUrl,          
+        portfolio_file_path: finalFileUrl, // <== 파일 이름 대신 Azure URL이 들어갑니다!
+
+        job_title: basicInfo.job,                  
+        career_history: JSON.stringify(histories),  
+        mentor_intro: introduction,                 
+        mentoring_topics: JSON.stringify(topics),         
+        detailed_experience: JSON.stringify(experiences)
+      };
+
+      // 🌟 3. 완성된 데이터를 호스트 등록 API로 전송!
+      const response = await fetch(`${BACKEND_URL}/api/mentor/register/${userId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(submitData)
@@ -381,53 +456,62 @@ const MentorRegistration = () => {
 
         <form className="space-y-6" onSubmit={handleSubmit}>
           
-          <div className="bg-white rounded-2xl p-8 shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)]">
-            <h2 className="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2">
-              기본 정보 및 경력
+          <div className="bg-white rounded-2xl p-8 shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)] border border-gray-50">
+            <h2 className="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2 border-b border-gray-100 pb-4">
+              <User className="w-5 h-5 text-blue-600" /> 기본 정보 및 경력
             </h2>
-            <div className="space-y-5">
+            
+            <div className="space-y-6">
+              
+              {/* 1열: 이름 및 현재 직무 (1:1 비율) */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                  {/* 기존 주직무, 세부직무 선택 필드 코드 아래에 추가 */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">현재 상태</label>
-                    <select 
-                      name="status" 
-                      value={basicInfo.status} 
-                      onChange={handleBasicChange} 
-                      className="w-full px-4 py-3 rounded-lg border border-gray-200 outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      {['현직자', '이직자', '프리랜서', '대학생', '취준생'].map(st => (
-                        <option key={st} value={st}>{st}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-                {/* 주 직무 선택 */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">주 직무</label>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">이름 / 닉네임</label>
+                  <input type="text" name="name" value={basicInfo.name} onChange={handleBasicChange} placeholder="예: 사라 (Sarah)" className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-slate-50 focus:bg-white outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all" />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">현재 직무 및 연차</label>
+                  <input type="text" name="job" value={basicInfo.job} onChange={handleBasicChange} placeholder="예: 백엔드 개발자 / 12년차" className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-slate-50 focus:bg-white outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all" />
+                </div>
+              </div>
+
+              {/* 2열: 카테고리 및 상태 (1:1:1 비율) */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-5 pt-2">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">현재 상태</label>
+                  <select 
+                    name="status" 
+                    value={basicInfo.status || '현직자'} 
+                    onChange={handleBasicChange} 
+                    className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-slate-50 focus:bg-white outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all cursor-pointer"
+                  >
+                    {['현직자', '이직자', '프리랜서', '대학생', '취준생'].map(st => (
+                      <option key={st} value={st}>{st}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">주 직무</label>
                   <select 
                     name="main_category" 
                     value={basicInfo.main_category} 
-                    onChange={handleBasicChange} 
-                    className="w-full px-4 py-3 rounded-lg border border-gray-200 outline-none focus:ring-2 focus:ring-blue-500"
+                    onChange={(e) => setBasicInfo(prev => ({ ...prev, main_category: e.target.value, sub_category: '' }))} 
+                    className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-slate-50 focus:bg-white outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all cursor-pointer"
                   >
-                    <option value="">주 직무 선택</option>
+                    <option value="" disabled>주 직무 선택</option>
                     {categories.map(cat => <option key={cat.main} value={cat.main}>{cat.main}</option>)}
                   </select>
                 </div>
-
-                {/* 부 직무 선택 (주 직무 선택 시에만 활성화) */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">세부 직무</label>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">세부 직무</label>
                   <select 
                     name="sub_category" 
                     value={basicInfo.sub_category} 
                     onChange={handleBasicChange}
                     disabled={!basicInfo.main_category}
-                    className="w-full px-4 py-3 rounded-lg border border-gray-200 outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+                    className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-slate-50 focus:bg-white outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed cursor-pointer"
                   >
-                    <option value="">세부 직무 선택</option>
+                    <option value="" disabled>세부 직무 선택</option>
                     {categories
                       .find(c => c.main === basicInfo.main_category)?.subs
                       .map(sub => <option key={sub} value={sub}>{sub}</option>)
@@ -435,24 +519,17 @@ const MentorRegistration = () => {
                   </select>
                 </div>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">이름 / 닉네임</label>
-                  <input type="text" name="name" value={basicInfo.name} onChange={handleBasicChange} placeholder="예: 사라 (Sarah)" className="w-full px-4 py-3 rounded-lg border border-gray-200 outline-none focus:ring-2 focus:ring-blue-500" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">현재 직무 및 연차</label>
-                  <input type="text" name="job" value={basicInfo.job} onChange={handleBasicChange} placeholder="예: 백엔드 개발자 / 12년차" className="w-full px-4 py-3 rounded-lg border border-gray-200 outline-none focus:ring-2 focus:ring-blue-500" />
-                </div>
-              </div>
               
+              <div className="border-t border-gray-100 my-2"></div>
+
+              {/* 3열: 주요 경력 */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">주요 경력 (최근 순으로 입력 후 Enter)</label>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">주요 경력 <span className="text-gray-400 font-normal text-xs ml-1">(최근 순으로 입력 후 Enter)</span></label>
                 <div className="flex gap-2 mb-3 flex-wrap">
                   {histories.map((history, index) => (
-                    <span key={index} className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-50 text-gray-800 border border-gray-300 rounded-lg text-sm font-medium">
+                    <span key={index} className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-50 text-gray-800 border border-gray-200 rounded-lg text-sm font-medium shadow-sm">
                       {history}
-                      <button type="button" onClick={() => removeHistory(index)} className="flex items-center justify-center w-4 h-4 rounded-full text-gray-400 hover:text-red-500 transition-colors focus:outline-none">
+                      <button type="button" onClick={() => removeHistory(index)} className="flex items-center justify-center w-4 h-4 rounded-full text-gray-400 hover:text-red-500 hover:bg-white transition-colors focus:outline-none">
                         ✕
                       </button>
                     </span>
@@ -464,17 +541,18 @@ const MentorRegistration = () => {
                   onChange={(e) => setHistoryInput(e.target.value)} 
                   onKeyDown={handleHistoryKeyDown} 
                   placeholder="예: Google (2020 - 현재)" 
-                  className="w-full px-4 py-3 rounded-lg border border-gray-200 outline-none focus:ring-2 focus:ring-blue-500" 
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-slate-50 focus:bg-white outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all" 
                 />
               </div>
 
+              {/* 4열: 해시태그 */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">나를 표현하는 해시태그 (입력 후 Enter)</label>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">나를 표현하는 해시태그 <span className="text-gray-400 font-normal text-xs ml-1">(입력 후 Enter)</span></label>
                 <div className="flex gap-2 mb-3 flex-wrap">
                   {hashtags.map((tag, index) => (
-                    <span key={index} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-600 border border-blue-200 rounded-full text-sm font-medium">
+                    <span key={index} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-600 border border-blue-200 rounded-full text-sm font-medium shadow-sm">
                       {tag}
-                      <button type="button" onClick={() => removeHashtag(index)} className="flex items-center justify-center w-4 h-4 rounded-full text-blue-300 hover:text-red-500 hover:bg-white transition-colors focus:outline-none">
+                      <button type="button" onClick={() => removeHashtag(index)} className="flex items-center justify-center w-4 h-4 rounded-full text-blue-400 hover:text-red-500 hover:bg-white transition-colors focus:outline-none">
                         ✕
                       </button>
                     </span>
@@ -486,9 +564,10 @@ const MentorRegistration = () => {
                   onChange={(e) => setHashtagInput(e.target.value)} 
                   onKeyDown={handleHashtagKeyDown} 
                   placeholder="예: 대용량트래픽" 
-                  className="w-full px-4 py-3 rounded-lg border border-gray-200 outline-none focus:ring-2 focus:ring-blue-500" 
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-slate-50 focus:bg-white outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all" 
                 />
               </div>
+
             </div>
           </div>
 

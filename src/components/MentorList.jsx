@@ -84,7 +84,10 @@ const MentorList = () => {
                 {/* 둥근 사각형 프로필 박스 처리 */}
                 <div className="w-full aspect-square overflow-hidden rounded-xl mb-4 bg-slate-50 relative">
                   <img
-                    src={host.avatar}
+                    // 💡 1. avatar가 비어있으면 기본 이미지 띄우기
+                    src={host.avatar || 'https://upload.wikimedia.org/wikipedia/commons/7/7c/Profile_avatar_placeholder_large.png'}
+                    // 💡 2. 혹시 링크가 깨져서 에러가 나면 잽싸게 기본 이미지로 교체하기 (핵심!)
+                    onError={(e) => { e.target.src = 'https://upload.wikimedia.org/wikipedia/commons/7/7c/Profile_avatar_placeholder_large.png'; }}
                     alt={host.name}
                     className="w-full h-full object-cover group-hover:scale-103 transition duration-300"
                   />
@@ -164,7 +167,7 @@ const MentorList = () => {
               </div>
               <h3 className="text-lg font-bold text-slate-800 m-0">세션 예약하기</h3>
               <p className="text-gray-600 text-xs leading-relaxed max-w-xs mx-auto m-0 font-medium">
-                호스트의 오픈된 일정을 직관적으로 조율해 일대일 맞춤형 커피챗 세션을 간편하게 예약할 수 있습니다.
+                호스트의 오픈된 일정을 직관적으로 조율해 일대일 맞춤형 티타임 세션을 간편하게 예약할 수 있습니다.
               </p>
             </div>
 

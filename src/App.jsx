@@ -1,18 +1,26 @@
 import React, { useEffect, useState } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import ScrollToTop from './components/ScrollToTop';
+
+// 공통 레이아웃 컴포넌트
 import Header from './components/Header';
-import Hero from './components/Hero';
-import MentorList from './components/MentorList';
-import Login from './Login';
-import './App.css';
 import Footer from './components/Footer';
-import Mentors from './pages/Mentors';
+import ChatBot from './components/ChatBot';
+
+// 인증 및 계정 관련 페이지
+import Login from './Login';
 import ProfileEdit from './pages/ProfileEdit';
-import './styles/index.css';
+// 호스트(멘토) 및 예약 관련 페이지
+import Mentors from './pages/Mentors';
 import MentorApply from './pages/MentorApply';
+import Dashboard from './pages/Dashboard';
 import BookingFlow from './pages/BookingFlow';
-import MentorDashboard from './pages/MentorDashboard';
+
+// 커피챗 대화방 및 리뷰/신고 관련 페이지
 import CoffeeChats from './pages/CoffeeChats';
+import CoffeeChatDetail from './pages/CoffeeChatDetail';
+import CoffeeChatRoom from './pages/CoffeeChatRoom';
+import CoffeeChatReview from './pages/CoffeeChatReview';
 import SignUpPage from './pages/SignUpPages';
 import ProfileSetup from './pages/ProfileSetup';
 import KakaoCallback from './components/KakaoCallback';
@@ -20,7 +28,31 @@ import MentorRegistration from './pages/MentorRegistration';
 import MainContent from './components/MainContent';
 import BookingHistory from './pages/BookingHistory';
 import ProfileImageUpload from './components/ProfileImageUpload';
-import CoffeeChatReview from './pages/CoffeeChatReview';
+
+
+import { Coffee } from 'lucide-react';
+import CoffeeChatReport from './pages/CoffeeChatReport';
+import Announcements from './pages/Announcements';
+import AnnouncementWrite from './pages/AnnouncementWrite';
+import AnnouncementDetail from './pages/AnnouncementDetail'; // 👈 상세 페이지
+import AnnouncementEdit from './pages/AnnouncementEdit';
+import WriteAnnouncement from "./pages/AnnouncementWrite";
+import CustomerCenter from './pages/CustomerCenter'; 
+// 🔥 1. 관리자용 고객센터 관리 컴포넌트 임포트 추가 (실제 파일 경로에 맞게 확인하세요)
+import AdminSupport from './pages/AdminSupport'; 
+
+import ChatEndPage from './pages/ChatEndPage';
+
+// 글로벌 스타일
+import './App.css';
+import './styles/index.css';
+
+function ChatBotWrapper() {
+  const location = useLocation();
+  const isCoffeeChatRoom = location.pathname.startsWith('/coffee-chat/');
+  if (isCoffeeChatRoom) return null;
+  return <ChatBot />;
+}
 
 const App = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(!!localStorage.getItem('token'));
@@ -30,6 +62,7 @@ const App = () => {
   const [redirectToHome, setRedirectToHome] = useState(false);
   const [profileQueryParams, setProfileQueryParams] = useState("");
 
+  // 소셜 로그인 세션 및 토큰 파싱
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const token = params.get('token');
@@ -44,62 +77,81 @@ const App = () => {
         decodedName = decodeURIComponent(nameParam);
         localStorage.setItem('userName', decodedName);
       }
+      if (idParam) localStorage.setItem('userId', idParam);
 
       setIsLoggedIn(true);
       setUserName(decodedName);
 
-      if (idParam) {
-        const emailParam = params.get('email');
-        setProfileQueryParams(`?token=${token}&name=${nameParam}&email=${emailParam}&id=${idParam}`);
-        setRedirectToProfile(true);
-      } else {
-        setRedirectToHome(true);
-      }
+      // 💡 여기서 강제로 프로필로 보내는 로직을 제거하고 무조건 Home으로 보냅니다!
+      setRedirectToHome(true);
       
       window.history.replaceState({}, document.title, window.location.pathname);
     }
   }, []);
 
+  // 리다이렉트 컴포넌트 마운트 직후 안전하게 상태를 클리어해주는 훅
+  useEffect(() => {
+    if (redirectToProfile) setRedirectToProfile(false);
+    if (redirectToHome) setRedirectToHome(false);
+  }, [redirectToProfile, redirectToHome]);
+
   return (
     <Router>
+      <ScrollToTop />
       <Header 
         isLoggedIn={isLoggedIn} 
         setIsLoggedIn={setIsLoggedIn} 
         userName={userName} 
       />
       
-      {redirectToProfile && (
-        <Navigate 
-          to={`/profile-setup${profileQueryParams}`} 
-          replace 
-          state={(() => { setRedirectToProfile(false); return {}; })()} 
-        />
-      )}
-      {redirectToHome && (
-        <Navigate 
-          to="/" 
-          replace 
-          state={(() => { setRedirectToHome(false); return {}; })()} 
-        />
-      )}
+      {/* 안전한 조건부 리다이렉션 제어 */}
+      {redirectToProfile && <Navigate to={`/profile-setup${profileQueryParams}`} replace />}
+      {redirectToHome && <Navigate to="/" replace />}
 
       <Routes>
+        {/* 메인 및 인증 */}
         <Route path="/" element={<MainContent />} />
         <Route path="/login" element={<Login />} />
+        <Route path="/signup" element={<SignUpPage />} />
+        <Route path="/login/kakao/callback" element={<KakaoCallback />} />
+        
+        {/* 🔥 2. 위에서 import 해온 AdminSupport 컴포넌트 연결 위치 (정상 동작) */}
+        <Route path="/admin/support" element={<AdminSupport />} />
+        
+        {/* 프로필 및 계정 설정 */}
+        <Route path="/profile-setup" element={<ProfileSetup />} />
+        <Route path="/profile/edit" element={<ProfileEdit />} />
+        <Route path="/profile-image-upload" element={<ProfileImageUpload />} />
+        
+        {/* 호스트(멘토) 찾기 및 신청/등록 */}
         <Route path="/mentors" element={<Mentors />} />
         <Route path="/mentors/apply/:id" element={<MentorApply />} />
-        <Route path="/profile/edit" element={<ProfileEdit />} />
-        <Route path="/booking/:mentorId" element={<BookingFlow />} />
-        <Route path="/dashboard" element={<MentorDashboard />} />
-        <Route path="/coffee-chats" element={<CoffeeChats />} />
-        <Route path="/coffee-chat/:chatId" element={<CoffeeChatReview />} />
-        <Route path="/signup" element={<SignUpPage />} />
-        <Route path="/profile-setup" element={<ProfileSetup />} />
-        <Route path="/login/kakao/callback" element={<KakaoCallback />} />
         <Route path="/mentor-registration" element={<MentorRegistration />} />
+        <Route path="/dashboard" element={<Dashboard />} />
+        
+        {/* 예약 및 구매 이력 */}
+        <Route path="/booking/:mentorId" element={<BookingFlow />} />
         <Route path="/booking-history" element={<BookingHistory />} />
-        <Route path="/profile-image-upload" element={<ProfileImageUpload />} />
+        
+        {/* 커피챗 대화 및 사후 관리 */}
+        <Route path="/coffee-chats" element={<CoffeeChats />} />
+        <Route path="/coffee-chat-detail/:id" element={<CoffeeChatDetail />} />
+        <Route path="/coffee-chat/:chatId" element={<CoffeeChatRoom />} />
+        <Route path="/coffee-chat-review/:chatId" element={<ChatEndPage />} />
+        <Route path="/coffee-chat-report/:chatId" element={<CoffeeChatReport />} />
+        
+        {/* 게시판 및 고객 소통 단지 */}
+        <Route path="/announcements" element={<Announcements />} />
+        <Route path="/announcement/write" element={<AnnouncementWrite />} />"
+        <Route path="/announcements/:id" element={<AnnouncementDetail />} />
+        <Route path="/announcement/edit/:id" element={<AnnouncementEdit />} />
+        
+        {/* 🔥 3. Announcements.jsx의 navigate('/announcement/write') 경로와 일치하도록 단수형(announcement)으로 수정 */}
+        
+        <Route path="/customer-center" element={<CustomerCenter />} />
       </Routes>
+      
+      <ChatBotWrapper />
       <Footer />
     </Router>
   );
