@@ -11,9 +11,8 @@
 > 💡 **클릭 시 유튜브로 이동합니다.** [00:02:01]부터 실제 WebRTC 화상 화면 및 Azure STT 기반의 실시간 AI 어시스턴트 패널 구동 시연을 확인하실 수 있습니다.
 
 ### 📂 프로젝트 발표 자료
-- [📄 TeaTimes 최종 발표 PPT (PDF 파일 보기)]([./docs/teatimes_presentation.pdf](https://github.com/q2qeq/teatimes/blob/sjlee5125/docs/teatimes_presentation.pdf))
-> 💡 *로컬 프로젝트 폴더 내 `docs/`에 PDF 파일을 넣어두시면 깃허브 웹에서 바로 슬라이드로 확인이 가능합니다.*
-
+- [📄 TeaTimes 최종 발표 PPT (PDF 파일 보기)](https://github.com/q2qeq/teatimes/blob/sjlee5125/docs/teatimes_presentation.pdf)
+> 💡 **클릭 시 깃허브 내장 뷰어로 이동합니다.** 별도의 다운로드 없이 브라우저 내에서 슬라이드로 바로 확인하실 수 있습니다.
 ---
 
 ## 📸 서비스 주요 화면
